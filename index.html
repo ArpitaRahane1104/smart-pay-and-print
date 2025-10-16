@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PrintMate Kiosk - Automated Pay & Print</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(180deg, #7c3aed 0%, #4f46e5 100%);
+      min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px;
+    }
+    .kiosk-container {
+      background: white; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+      width: 100%; max-width: 450px; overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: white; padding: 20px; text-align: center;
+    }
+    .header h1 { font-size: 1.6rem; margin-bottom: 5px; }
+    .header p { font-size: 0.9rem; opacity: 0.9; }
+
+    .screen { display: none; padding: 25px; }
+    .screen.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .option-list { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
+    .option-card {
+      background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px;
+      display: flex; align-items: center; gap: 15px; cursor: pointer;
+      transition: all 0.25s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    .option-card:hover { background: #eef2ff; transform: translateY(-3px); }
+    .option-icon { font-size: 2.2rem; }
+    .option-text h3 { font-size: 1rem; margin-bottom: 4px; }
+    .option-text p { font-size: 0.85rem; color: #6b7280; }
+
+    .file-upload-zone {
+      background: #eef2ff; border: 2px dashed #4f46e5; border-radius: 15px; padding: 40px;
+      text-align: center; margin-bottom: 20px; cursor: pointer; transition: all 0.3s ease;
+    }
+    .file-upload-zone:hover { background: #e0e7ff; }
+    .uploaded-file {
+      background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;
+      margin: 10px 0; display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+    .form-control { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 1rem; }
+
+    .btn {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; border: none;
+      padding: 14px 24px; border-radius: 10px; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: all 0.3s ease;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(79,70,229,0.3); }
+    .btn-secondary { background: linear-gradient(135deg, #6b7280, #4b5563); }
+    .btn-success { background: linear-gradient(135deg, #10b981, #059669); }
+
+    .document-preview {
+      background: #f3f4f6; border: 2px dashed #d1d5db; border-radius: 10px;
+      padding: 30px; text-align: center; margin-bottom: 20px; min-height: 180px;
+      display: flex; align-items: center; justify-content: center; flex-direction: column;
+    }
+    .cost-summary { background: #fef3c7; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+    .total-cost { font-size: 1.4rem; font-weight: bold; border-top: 2px solid #d97706; padding-top: 10px; margin-top: 10px; }
+
+    .navigation { display: flex; justify-content: space-between; padding-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="kiosk-container">
+    <div class="header">
+      <h1>🖨️ PrintMate Kiosk</h1>
+      <p>Your Automated Pay & Print Solution</p>
+    </div>
+
+    <!-- Welcome Screen -->
+    <div class="screen active" id="welcome">
+      <h2>Welcome! How would you like to print today?</h2>
+      <div class="option-list">
+        <div class="option-card" onclick="navigateToScreen('upload')">
+          <span class="option-icon">📁</span>
+          <div class="option-text">
+            <h3>Upload from Device</h3>
+            <p>Upload files from USB or device storage</p>
+          </div>
+        </div>
+
+        <div class="option-card" onclick="openEmailPrint()">
+          <span class="option-icon">📧</span>
+          <div class="option-text">
+            <h3>Email to Print</h3>
+            <p>Send documents via email</p>
+          </div>
+        </div>
+
+        <div class="option-card" onclick="openCloudStorage()">
+          <span class="option-icon">☁️</span>
+          <div class="option-text">
+            <h3>Cloud Storage</h3>
+            <p>Print from Google Drive or Dropbox</p>
+          </div>
+        </div>
+
+        <div class="option-card" onclick="openScanner()">
+          <span class="option-icon">📄</span>
+          <div class="option-text">
+            <h3>Scan & Print</h3>
+            <p>Scan physical documents</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Screen -->
+    <div class="screen" id="upload">
+      <h2>📁 Upload Your Documents</h2>
+      <div class="file-upload-zone" onclick="document.getElementById('fileInput').click()">
+        <span style="font-size:3rem;">📤</span>
+        <h3>Click here to select files</h3>
+        <p>Supported: PDF, DOC, DOCX, JPG, PNG, TXT</p>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt" style="display:none;">
+      <div id="uploadedFiles"></div>
+      <div class="navigation">
+        <button class="btn btn-secondary" onclick="navigateToScreen('welcome')">⬅ Back</button>
+        <button class="btn btn-success" onclick="navigateToPreview()">Proceed ➡</button>
+      </div>
+    </div>
+
+    <!-- Preview & Settings -->
+    <div class="screen" id="preview">
+      <h2>👁️ Preview & Settings</h2>
+      <div class="document-preview">
+        <h3>Document Preview</h3>
+        <p><strong id="fileName">Sample.pdf</strong> – <span id="pageCount">Detecting...</span></p>
+      </div>
+
+      <div class="settings-card">
+        <div class="form-group">
+          <label for="copies">Copies</label>
+          <input type="number" id="copies" class="form-control" value="1" min="1">
+        </div>
+        <div class="form-group">
+          <label for="color">Color</label>
+          <select id="color" class="form-control">
+            <option value="bw" data-rate="2">Black & White – ₹2/page</option>
+            <option value="color" data-rate="10">Color – ₹10/page</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="sides">Sides</label>
+          <select id="sides" class="form-control">
+            <option value="single">Single Sided</option>
+            <option value="double">Double Sided</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="cost-summary">
+        <h3>💰 Cost Summary</h3>
+        <p>Pages: <span id="summaryPages">–</span></p>
+        <p>Copies: <span id="summaryCopies">1</span></p>
+        <p>Mode: <span id="summaryMode">Black & White</span></p>
+        <p class="total-cost">Total: ₹<span id="totalCost">–</span></p>
+      </div>
+
+      <div class="navigation">
+        <button class="btn btn-secondary" onclick="navigateToScreen('upload')">⬅ Back</button>
+        <button class="btn" onclick="navigateToScreen('payment')">Proceed to Payment ➡</button>
+      </div>
+    </div>
+
+    <!-- Payment -->
+    <div class="screen" id="payment">
+      <h2>💳 Payment</h2>
+      <p>Complete your payment to start printing.</p>
+      <div class="navigation" style="justify-content:center;">
+        <button class="btn btn-success" onclick="startPayment()">Pay Now</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let totalPages = 0;
+
+    function navigateToScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(screenId).classList.add('active');
+    }
+
+    // ---- File Upload ----
+    const fileInput = document.getElementById('fileInput');
+    const uploadedFiles = document.getElementById('uploadedFiles');
+
+    fileInput.addEventListener('change', () => {
+      uploadedFiles.innerHTML = '';
+      Array.from(fileInput.files).forEach(file => {
+        const div = document.createElement('div');
+        div.className = 'uploaded-file';
+        div.textContent = file.name;
+        uploadedFiles.appendChild(div);
+      });
+    });
+
+    // ---- Preview ----
+    async function navigateToPreview() {
+      const file = fileInput.files[0];
+      if (!file) return alert('Please upload a file first.');
+      document.getElementById('fileName').textContent = file.name;
+      document.getElementById('pageCount').textContent = 'Detecting...';
+      totalPages = await getFilePageEstimate(file);
+      document.getElementById('pageCount').textContent = `${totalPages} pages`;
+      calculateCost();
+      navigateToScreen('preview');
+    }
+
+    // ---- Page Counting ----
+    async function getFilePageEstimate(file) {
+      if (file.type === 'application/pdf') {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          return pdf.numPages;
+        } catch { return 1; }
+      } else if (file.type.includes('image')) {
+        return 1;
+      } else if (file.type.includes('text')) {
+        const text = await file.text();
+        return Math.ceil(text.length / 1800) || 1;
+      } else {
+        return 3; // fallback estimate for DOC/DOCX
+      }
+    }
+
+    // ---- Cost Calculation ----
+    function calculateCost() {
+      const rate = parseInt(document.querySelector('#color option:checked').dataset.rate);
+      const copies = parseInt(document.getElementById('copies').value);
+      const pages = totalPages || 1;
+      const total = rate * copies * pages;
+      document.getElementById('summaryPages').textContent = pages;
+      document.getElementById('summaryCopies').textContent = copies;
+      document.getElementById('summaryMode').textContent =
+        document.getElementById('color').value === 'bw' ? 'Black & White' : 'Color';
+      document.getElementById('totalCost').textContent = total;
+    }
+
+    ['copies', 'color', 'sides'].forEach(id =>
+      document.getElementById(id).addEventListener('change', calculateCost)
+    );
+
+    // ---- Payment ----
+    function startPayment() {
+      window.location.href = 'https://razorpay.me/@sarveshmanojgavade';
+    }
+
+    // ---- Other Options ----
+    function openEmailPrint() {
+      window.location.href = "mailto:print@printmatekiosk.com?subject=Print%20Request&body=Attach%20your%20file%20to%20print.";
+    }
+
+    function openCloudStorage() {
+      alert("Cloud integration coming soon! (Google Drive / Dropbox)");
+    }
+
+    function openScanner() {
+      alert("Opening camera for scan... (feature in development)");
+      // Future: navigator.mediaDevices.getUserMedia({ video: true })
+    }
+  </script>
+</body>
+</html>
